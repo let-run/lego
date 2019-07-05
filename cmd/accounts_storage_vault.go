@@ -191,6 +191,9 @@ func (s *AccountsStorage) GetPrivateKey(keyType certcrypto.KeyType) crypto.Priva
 				"data": pem.EncodeToMemory(pemKey),
 			},
 		)
+		if err != nil {
+			log.Fatalf("Could not write private account key for account %s: %v", s.userID, err)
+		}
 
 		return privateKey
 	}
