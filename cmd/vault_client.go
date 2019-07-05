@@ -41,17 +41,6 @@ func (c *vaultClient) Get() (*api.Client, error) {
 			token := strings.TrimSpace(getVaultToken(c.fetchVaultToken))
 			if token != c.prevFetchedToken {
 				log.Printf("[DEBUG] vault: token has changed, setting new token")
-				// did we get a wrapped token?
-				resp, err := c.client.Logical().Unwrap(token)
-				switch {
-				case err == nil:
-					log.Printf("[INFO] vault: Unwrapped token %s", token)
-					c.client.SetToken(resp.Auth.ClientToken)
-				case strings.HasPrefix(err.Error(), "no value found at"):
-					// not a wrapped token
-				default:
-					return nil, err
-				}
 				c.prevFetchedToken = token
 			}
 		}
@@ -85,18 +74,6 @@ func (c *vaultClient) Get() (*api.Client, error) {
 	token := client.Token()
 	if token == "" {
 		return nil, errors.New("vault: no token")
-	}
-
-	// did we get a wrapped token?
-	resp, err := client.Logical().Unwrap(token)
-	switch {
-	case err == nil:
-		log.Printf("[INFO] vault: Unwrapped token %s", token)
-		client.SetToken(resp.Auth.ClientToken)
-	case strings.HasPrefix(err.Error(), "no value found at"):
-		// not a wrapped token
-	default:
-		return nil, err
 	}
 
 	c.client = client
