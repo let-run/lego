@@ -1,4 +1,4 @@
-// +build vault
+// +build !vault
 
 package cmd
 
