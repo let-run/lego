@@ -20,7 +20,7 @@ type CertificatesStorage struct {
 // NewCertificatesStorage create a new certificates storage.
 func NewCertificatesStorage(ctx *cli.Context) *CertificatesStorage {
 	return &CertificatesStorage{
-		Client: NewVaultClient(ctx.GlobalString("env:VAULT_TOKEN")),
+		Client: NewVaultClient(ctx.GlobalString("")),
 	}
 }
 

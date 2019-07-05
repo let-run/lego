@@ -73,7 +73,7 @@ func NewAccountsStorage(ctx *cli.Context) *AccountsStorage {
 		userID:          email,
 		ctx:             ctx,
 
-		Client: NewVaultClient("env:VAULT_TOKEN"),
+		Client: NewVaultClient(""),
 	}
 }
 
