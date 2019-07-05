@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-acme/lego/certificate"
 	"github.com/go-acme/lego/lego"
@@ -48,6 +49,9 @@ func run(ctx *cli.Context) error {
 
 	account, client := setup(ctx, accountsStorage)
 	setupChallenges(ctx, client)
+
+	fmt.Println("Wait until web-server is registered in load-balancer")
+	time.Sleep(10*time.Second)
 
 	if account.Registration == nil {
 		reg, err := register(ctx, client)
