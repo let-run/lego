@@ -1,4 +1,4 @@
-// +build vault
+// +build !vault
 
 package cmd
 
@@ -45,9 +45,11 @@ func (s *CertificatesStorage) SaveResource(certRes *certificate.Resource) {
 	_, err = c.Logical().Write(
 		fmt.Sprintf("secret/data/fabio/certs/%s", domain),
 		map[string]interface{}{
-			"cert": certRes.Certificate,
-			"key": certRes.PrivateKey,
-			"issuer": certRes.IssuerCertificate,
+			"data": map[string]interface{}{
+				"cert":   certRes.Certificate,
+				"key":    certRes.PrivateKey,
+				"issuer": certRes.IssuerCertificate,
+			},
 		},
 	)
 	if err != nil {
@@ -62,7 +64,9 @@ func (s *CertificatesStorage) SaveResource(certRes *certificate.Resource) {
 	_, err = c.Logical().Write(
 		fmt.Sprintf("secret/data/fabio/json/%s", domain),
 		map[string]interface{}{
-			"data": jsonBytes,
+			"data": map[string]interface{}{
+				"data": jsonBytes,
+			},
 		},
 	)
 	if err != nil {
@@ -84,7 +88,8 @@ func (s *CertificatesStorage) ReadResource(domain string) certificate.Resource {
 	}
 
 	var resource certificate.Resource
-	if err = json.Unmarshal(resp.Data["data"].([]byte), &resource); err != nil {
+	d := resp.Data["data"].(map[string]interface{})
+	if err = json.Unmarshal(d["data"].([]byte), &resource); err != nil {
 		log.Fatalf("Error while marshaling the meta data for domain %s\n\t%v", domain, err)
 	}
 

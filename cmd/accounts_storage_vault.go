@@ -1,4 +1,4 @@
-// +build vault
+// +build !vault
 
 package cmd
 
@@ -119,7 +119,9 @@ func (s *AccountsStorage) Save(account *Account) error {
 	_, err = c.Logical().Write(
 		fmt.Sprintf("secret/data/fabio/account/%s", account.Email),
 		map[string]interface{}{
-			"data": jsonBytes,
+			"data": map[string]interface{}{
+				"data": jsonBytes,
+			},
 		},
 	)
 
@@ -140,7 +142,8 @@ func (s *AccountsStorage) LoadAccount(privateKey crypto.PrivateKey) *Account {
 	}
 
 	var account Account
-	err = json.Unmarshal(resp.Data["data"].([]byte), &account)
+	d := resp.Data["data"].(map[string]interface{})
+	err = json.Unmarshal(d["data"].([]byte), &account)
 	if err != nil {
 		log.Fatalf("Could not parse file for account %s -> %v", s.userID, err)
 	}
@@ -173,7 +176,7 @@ func (s *AccountsStorage) GetPrivateKey(keyType certcrypto.KeyType) crypto.Priva
 		fmt.Sprintf("secret/data/fabio/private_key/%s", s.userID),
 	)
 	if err != nil {
-		log.Fatalf("No key found for account %s. Generating a %s key.", s.userID, keyType)
+		log.Fatalf("No key found for account %s. Generating a %s key., err: %v", s.userID, keyType, err)
 	}
 
 	if resp == nil {
@@ -188,7 +191,9 @@ func (s *AccountsStorage) GetPrivateKey(keyType certcrypto.KeyType) crypto.Priva
 		_, err = c.Logical().Write(
 			fmt.Sprintf("secret/data/fabio/private_key/%s", s.userID),
 			map[string]interface{}{
-				"data": pem.EncodeToMemory(pemKey),
+				"data": map[string]interface{}{
+					"data": string(pem.EncodeToMemory(pemKey)),
+				},
 			},
 		)
 		if err != nil {
@@ -198,7 +203,8 @@ func (s *AccountsStorage) GetPrivateKey(keyType certcrypto.KeyType) crypto.Priva
 		return privateKey
 	}
 
-	privateKey, err := loadPrivateKey(resp.Data["data"].([]byte))
+	d := resp.Data["data"].(map[string]interface{})
+	privateKey, err := loadPrivateKey([]byte(d["data"].(string)))
 	if err != nil {
 		log.Fatalf("Could not load RSA private key from file %s: %v", s.userID, err)
 	}
