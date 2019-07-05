@@ -1,4 +1,4 @@
-// +build !vault
+// +build vault
 
 package cmd
 
@@ -9,11 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/go-acme/lego/certcrypto"
 	"github.com/go-acme/lego/lego"
@@ -64,11 +59,9 @@ const (
 //
 type AccountsStorage struct {
 	userID          string
-	rootPath        string
-	rootUserPath    string
-	keysPath        string
-	accountFilePath string
 	ctx             *cli.Context
+
+	Client          *vaultClient
 }
 
 // NewAccountsStorage Creates a new AccountsStorage.
@@ -76,42 +69,36 @@ func NewAccountsStorage(ctx *cli.Context) *AccountsStorage {
 	// TODO: move to account struct? Currently MUST pass email.
 	email := getEmail(ctx)
 
-	serverURL, err := url.Parse(ctx.GlobalString("server"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rootPath := filepath.Join(ctx.GlobalString("path"), baseAccountsRootFolderName)
-	serverPath := strings.NewReplacer(":", "_", "/", string(os.PathSeparator)).Replace(serverURL.Host)
-	accountsPath := filepath.Join(rootPath, serverPath)
-	rootUserPath := filepath.Join(accountsPath, email)
-
 	return &AccountsStorage{
 		userID:          email,
-		rootPath:        rootPath,
-		rootUserPath:    rootUserPath,
-		keysPath:        filepath.Join(rootUserPath, baseKeysFolderName),
-		accountFilePath: filepath.Join(rootUserPath, accountFileName),
 		ctx:             ctx,
+
+		Client: NewVaultClient(ctx.GlobalString("vault")),
 	}
 }
 
 func (s *AccountsStorage) ExistsAccountFilePath() bool {
-	accountFile := filepath.Join(s.rootUserPath, accountFileName)
-	if _, err := os.Stat(accountFile); os.IsNotExist(err) {
-		return false
-	} else if err != nil {
-		log.Fatal(err)
+	c, err := s.Client.Get()
+	if err != nil {
+		log.Fatalf("vault: client: %s", err)
 	}
+
+	resp, err := c.Logical().Read(
+		fmt.Sprintf("secret/data/fabio/account/%s", s.userID),
+	)
+	if err != nil || resp == nil {
+		return false
+	}
+
 	return true
 }
 
 func (s *AccountsStorage) GetRootPath() string {
-	return s.rootPath
+	return ""
 }
 
 func (s *AccountsStorage) GetRootUserPath() string {
-	return s.rootUserPath
+	return ""
 }
 
 func (s *AccountsStorage) GetUserID() string {
@@ -119,22 +106,41 @@ func (s *AccountsStorage) GetUserID() string {
 }
 
 func (s *AccountsStorage) Save(account *Account) error {
+	c, err := s.Client.Get()
+	if err != nil {
+		log.Fatalf("vault: client: %s", err)
+	}
+
 	jsonBytes, err := json.MarshalIndent(account, "", "\t")
 	if err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(s.accountFilePath, jsonBytes, filePerm)
+	_, err = c.Logical().Write(
+		fmt.Sprintf("secret/data/fabio/account/%s", account.Email),
+		map[string]interface{}{
+			"data": jsonBytes,
+		},
+	)
+
+	return err
 }
 
 func (s *AccountsStorage) LoadAccount(privateKey crypto.PrivateKey) *Account {
-	fileBytes, err := ioutil.ReadFile(s.accountFilePath)
+	c, err := s.Client.Get()
 	if err != nil {
-		log.Fatalf("Could not load file for account %s -> %v", s.userID, err)
+		log.Fatalf("vault: client: %s", err)
+	}
+
+	resp, err := c.Logical().Read(
+		fmt.Sprintf("secret/data/fabio/account/%s", s.userID),
+	)
+	if err != nil {
+		log.Fatalf("Error while loading account %s\n\t%v", s.userID, err)
 	}
 
 	var account Account
-	err = json.Unmarshal(fileBytes, &account)
+	err = json.Unmarshal(resp.Data["data"].([]byte), &account)
 	if err != nil {
 		log.Fatalf("Could not parse file for account %s -> %v", s.userID, err)
 	}
@@ -158,62 +164,47 @@ func (s *AccountsStorage) LoadAccount(privateKey crypto.PrivateKey) *Account {
 }
 
 func (s *AccountsStorage) GetPrivateKey(keyType certcrypto.KeyType) crypto.PrivateKey {
-	accKeyPath := filepath.Join(s.keysPath, s.userID+".key")
+	c, err := s.Client.Get()
+	if err != nil {
+		log.Fatalf("vault: client: %s", err)
+	}
 
-	if _, err := os.Stat(accKeyPath); os.IsNotExist(err) {
+	resp, err := c.Logical().Read(
+		fmt.Sprintf("secret/data/fabio/private_key/%s", s.userID),
+	)
+	if err != nil {
+		log.Fatalf("No key found for account %s. Generating a %s key.", s.userID, keyType)
+	}
+
+	if resp == nil {
 		log.Printf("No key found for account %s. Generating a %s key.", s.userID, keyType)
-		s.createKeysFolder()
 
-		privateKey, err := generatePrivateKey(accKeyPath, keyType)
+		privateKey, err := certcrypto.GeneratePrivateKey(keyType)
 		if err != nil {
 			log.Fatalf("Could not generate RSA private account key for account %s: %v", s.userID, err)
 		}
 
-		log.Printf("Saved key to %s", accKeyPath)
+		pemKey := certcrypto.PEMBlock(privateKey)
+		_, err = c.Logical().Write(
+			fmt.Sprintf("secret/data/fabio/private_key/%s", s.userID),
+			map[string]interface{}{
+				"data": pem.EncodeToMemory(pemKey),
+			},
+		)
+
 		return privateKey
 	}
 
-	privateKey, err := loadPrivateKey(accKeyPath)
+	privateKey, err := loadPrivateKey(resp.Data["data"].([]byte))
 	if err != nil {
-		log.Fatalf("Could not load RSA private key from file %s: %v", accKeyPath, err)
+		log.Fatalf("Could not load RSA private key from file %s: %v", s.userID, err)
 	}
 
 	return privateKey
 }
 
-func (s *AccountsStorage) createKeysFolder() {
-	if err := createNonExistingFolder(s.keysPath); err != nil {
-		log.Fatalf("Could not check/create directory for account %s: %v", s.userID, err)
-	}
-}
 
-func generatePrivateKey(file string, keyType certcrypto.KeyType) (crypto.PrivateKey, error) {
-	privateKey, err := certcrypto.GeneratePrivateKey(keyType)
-	if err != nil {
-		return nil, err
-	}
-
-	certOut, err := os.Create(file)
-	if err != nil {
-		return nil, err
-	}
-	defer certOut.Close()
-
-	pemKey := certcrypto.PEMBlock(privateKey)
-	err = pem.Encode(certOut, pemKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return privateKey, nil
-}
-
-func loadPrivateKey(file string) (crypto.PrivateKey, error) {
-	keyBytes, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-
+func loadPrivateKey(keyBytes []byte) (crypto.PrivateKey, error) {
 	keyBlock, _ := pem.Decode(keyBytes)
 
 	switch keyBlock.Type {
