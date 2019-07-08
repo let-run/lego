@@ -46,9 +46,9 @@ func (s *CertificatesStorage) SaveResource(certRes *certificate.Resource) {
 		fmt.Sprintf("secret/data/fabio/certs/%s", domain),
 		map[string]interface{}{
 			"data": map[string]interface{}{
-				"cert":   certRes.Certificate,
-				"key":    certRes.PrivateKey,
-				"issuer": certRes.IssuerCertificate,
+				"cert":   string(certRes.Certificate),
+				"key":    string(certRes.PrivateKey),
+				"issuer": string(certRes.IssuerCertificate),
 			},
 		},
 	)
