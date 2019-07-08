@@ -120,7 +120,7 @@ func (s *AccountsStorage) Save(account *Account) error {
 		fmt.Sprintf("secret/data/fabio/account/%s", account.Email),
 		map[string]interface{}{
 			"data": map[string]interface{}{
-				"data": jsonBytes,
+				"data": string(jsonBytes),
 			},
 		},
 	)
@@ -143,7 +143,7 @@ func (s *AccountsStorage) LoadAccount(privateKey crypto.PrivateKey) *Account {
 
 	var account Account
 	d := resp.Data["data"].(map[string]interface{})
-	err = json.Unmarshal(d["data"].([]byte), &account)
+	err = json.Unmarshal([]byte(d["data"].(string)), &account)
 	if err != nil {
 		log.Fatalf("Could not parse file for account %s -> %v", s.userID, err)
 	}

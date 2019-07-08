@@ -65,7 +65,7 @@ func (s *CertificatesStorage) SaveResource(certRes *certificate.Resource) {
 		fmt.Sprintf("secret/data/fabio/json/%s", domain),
 		map[string]interface{}{
 			"data": map[string]interface{}{
-				"data": jsonBytes,
+				"data": string(jsonBytes),
 			},
 		},
 	)
@@ -89,7 +89,7 @@ func (s *CertificatesStorage) ReadResource(domain string) certificate.Resource {
 
 	var resource certificate.Resource
 	d := resp.Data["data"].(map[string]interface{})
-	if err = json.Unmarshal(d["data"].([]byte), &resource); err != nil {
+	if err = json.Unmarshal([]byte(d["data"].(string)), &resource); err != nil {
 		log.Fatalf("Error while marshaling the meta data for domain %s\n\t%v", domain, err)
 	}
 
