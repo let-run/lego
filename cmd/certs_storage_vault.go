@@ -105,7 +105,7 @@ func (s *CertificatesStorage) ExistsFile(domain, extension string) bool {
 	resp, err := c.Logical().Read(
 		fmt.Sprintf("secret/data/fabio/json/%s", domain),
 	)
-	if err != nil || resp == nil {
+	if err != nil || resp == nil || len(resp.Data) == 0 {
 		return false
 	}
 

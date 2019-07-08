@@ -86,7 +86,7 @@ func (s *AccountsStorage) ExistsAccountFilePath() bool {
 	resp, err := c.Logical().Read(
 		fmt.Sprintf("secret/data/fabio/account/%s", s.userID),
 	)
-	if err != nil || resp == nil {
+	if err != nil || resp == nil || len(resp.Data) == 0 {
 		return false
 	}
 
