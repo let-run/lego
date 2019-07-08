@@ -142,10 +142,13 @@ func (s *AccountsStorage) LoadAccount(privateKey crypto.PrivateKey) *Account {
 	}
 
 	var account Account
-	d := resp.Data["data"].(map[string]interface{})
-	err = json.Unmarshal([]byte(d["data"].(string)), &account)
-	if err != nil {
-		log.Fatalf("Could not parse file for account %s -> %v", s.userID, err)
+
+	if resp.Data["data"] != nil {
+		d := resp.Data["data"].(map[string]interface{})
+		err = json.Unmarshal([]byte(d["data"].(string)), &account)
+		if err != nil {
+			log.Fatalf("Could not parse file for account %s -> %v", s.userID, err)
+		}
 	}
 
 	account.key = privateKey
